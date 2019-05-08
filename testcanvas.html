@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html>
+<body>
+
+<canvas id="myCanvas" width="800" height="600"
+style="border:1px solid #c3c3c3;">
+Your browser does not support the canvas element.
+</canvas>
+
+<!--script src="https://cdn.jsdelivr.net/gh/nicolaspanel/numjs@0.15.1/dist/numjs.min.js"></script-->
+<!--script src="numjs.min.js"></script-->
+<script>
+
+UNIT_SIZE_PX = 32  // Size of a default unit in pixels
+
+
+function abs(x) {
+	return x>0? x: -x
+}
+
+function sum(arr) {
+	var res = 0
+	for (var i in arr) res += arr[i]
+	return res
+}
+
+function dot(a, b) {
+	var res = 0
+	for (var i in a) res += a[i]*b[i]
+	return res
+}
+
+function hsum(ns, pows, s){
+	var res = 0
+	for (var i in ns) res += ns[i] * s**pows[i]
+	return res;
+}
+
+class Rect {
+	constructor(x, y, w, h) {
+		// in pixels
+		this.x = x
+		this.y = y
+		this.w = w
+		this.h = h
+	}
+}
+
+class Container {
+	// size in cells
+	constructor(w=1, h=1, pow=1) {
+		this.w = w
+		this.h = h
+		this.pow = pow
+	}
+
+	draw(canvas, rect) {}
+}
+
+class Layout extends Container {
+	children = new Array()
+
+	_solve_unit(size_px, ns, pows, max_iters=30, tol=0.01) {
+		// h = size_px / UNIT_SIZE_PX - total height in units,
+		// n_i = ns[i] - hight of each element in cells,
+		// s - scale (size of a cell (pow=1) in units),
+		// p_i = pows[i] - scale power for each element.
+		//
+		// We solve the following equation on s:
+		// h = sum_i{n_i * s^p_i}
+		//
+		// Returns size in pixels for each container.
+		// The function usually returns in <5us.
+
+		var h = size_px / UNIT_SIZE_PX
+		var dhds0 = dot(ns, pows)
+		var s0 = h / dhds0
+		var h0 = hsum(ns, pows, s0)
+		var s1 = s0 - (h0 - h) / dhds0
+		s1 = s1<0 ? 0 : s1
+
+		for (var i=0; i<max_iters && s1!=s0 && abs(h0-h)>tol; i++) {
+			var h1 = hsum(ns, pows, s1)
+			var dhds = (h1-h0) / (s1-s0)
+			dhds = 0.9*dhds + 0.1*dhds0  // regularization
+			var s2 = s1 - (h1 - h) / dhds
+			s0 = s1
+			s1 = s2<0 ? 0 : s2
+			h0 = h1
+		}
+
+		var result = new Array(ns.length)
+		for (var i in ns) {
+			result[i] = UNIT_SIZE_PX * ns[i] * s1**pows[i]
+		}
+		return result
+	}
+
+	_children_pows() {
+		var result = new Array()
+		for (var i in this.children) result.push(this.children[i].pow)
+		return result
+	}
+
+	_children_ws() {
+		var result = new Array()
+		for (var i in this.children) result.push(this.children[i].w)
+		return result
+	}
+
+	_children_hs() {
+		var result = new Array()
+		for (var i in this.children) result.push(this.children[i].h)
+		return result
+	}
+}
+
+class HBox extends Layout {
+	draw(canvas, rect) {
+		var solution = this._solve_unit(rect.w, this._children_ws(), this._children_pows())
+		var x = rect.x
+		for (var i in this.children) {
+			this.children[i].draw(canvas, new Rect(x, rect.y, solution[i], rect.h))
+			x += solution[i]
+		}
+	}
+}
+
+class VBox extends Layout {
+	draw(canvas, rect) {
+		var solution = this._solve_unit(rect.h, this._children_hs(), this._children_pows())
+		var y = rect.y
+		for (var i in this.children) {
+			this.children[i].draw(canvas, new Rect(rect.x, y, rect.w, solution[i]))
+			y += solution[i]
+		}
+	}
+}
+
+class Box extends Container {
+	constructor(w, h, pow, color) {
+		super(w, h, pow)
+		this.color = color
+	}
+
+	draw(canvas, rect) {
+		var ctx = canvas.getContext("2d")
+		ctx.fillStyle = this.color
+		ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
+	}
+}
+
+class TextBox extends Container {
+	constructor(w, h, pow, text) {
+		super(w, h, pow)
+		this.text = text
+	}
+
+	draw(canvas, rect) {
+		console.log(rect)
+		var ctx = canvas.getContext("2d")
+		ctx.fillStyle = '#ff9';
+		ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+		ctx.font = rect.h*0.8 + "px Mono"
+		ctx.fillStyle = "black"
+		ctx.fillText(this.text, rect.x, rect.y+rect.h*0.8)
+	}
+}
+
+
+// size_px = 100
+// ns = [1, 2, 1]
+// pows = [0.5, 1, 1]
+
+// x = (new Layout())._solve_unit(size_px, ns, pows)
+// console.log(x)
+
+hb = new HBox()
+hb.children.push(new Box(1, 1, 0.5, "#F00"))
+hb.children.push(new Box(1, 1, 1, "#0F0"))
+hb.children.push(new Box(1, 1, 1, "#00F"))
+
+vb = new VBox()
+vb.children.push(new TextBox(1, 1, 0.5, "Hxgf"))
+vb.children.push(hb)
+
+
+var canvas = document.getElementById("myCanvas");
+canvas.onwheel = zoom
+canvas.onmousemove = shift
+
+
+r = new Rect(100, 100, 200, 200)
+vb.draw(canvas, r)
+
+function redraw() {
+	// clear canvas
+	var ctx = canvas.getContext("2d");
+	ctx.fillStyle = 'white';
+	ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+	vb.draw(canvas, r)
+}
+
+function shift(event) {
+	if (event.buttons==1 && event.button==0) {
+		r.x += event.movementX
+		r.y += event.movementY
+		redraw()
+	}
+}
+
+function zoom(event) {
+	//console.log(event)
+	var k = 1.1
+	if (event.deltaY > 0) {
+		r.w *= k
+		r.h *= k
+	} else {
+		r.w /= k
+		r.h /= k
+	}
+	redraw()
+}
+
+// var ctx = canvas.getContext("2d");
+// for (i = 0; i < 10; i++) {
+// 	var ctx = canvas.getContext("2d")
+// 	ctx.fillStyle = "#FF0000"
+// 	ctx.fillRect(100,100,100,100)
+// 	ctx.font = "50.176352px Mono"
+// 	ctx.fillText("Hello World", 10, 50)
+// }
+</script>
+
+</body>
+</html>
