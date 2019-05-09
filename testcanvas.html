@@ -43,6 +43,13 @@ function max(arr) {
 	return res
 }
 
+function min(arr) {
+	var res = arr[0]
+	for (var i in arr)
+		if (arr[i] < res) res = arr[i]
+	return res
+}
+
 class Rect {
 	constructor(x, y, w, h) {
 		// in pixels
@@ -59,10 +66,13 @@ class Container {
 		this.w = w
 		this.h = h
 		this.pow = pow
+		this.canvas = undefined
 		this.rect = new Rect()
+		this.cursor_style = undefined
 	}
 
 	draw(canvas, rect) {
+		this.canvas = canvas
 		this.rect = rect
 	}
 
@@ -71,7 +81,7 @@ class Container {
 		return r.x < x && x < r.x+r.w && r.y < y && y < r.y+r.h
 	}
 
-	handle_event(event, type="onclick") {
+	handle_event(event, type) {
 		try {
 			this[type](event)
 			return true
@@ -79,10 +89,20 @@ class Container {
 			return false
 		}
 	}
+
+	onmousemove(event) {
+		if (this.onclick && !this.cursor_style) {
+			this.cursor_style = "pointer"
+		}
+		if (this.cursor_style && this.hit_test(event.offsetX, event.offsetY)) {
+			this.canvas.style.cursor = this.cursor_style
+		}
+	}
 }
 
 class Layout extends Container {
 	children = new Array()
+	padding = 0
 
 	_solve_unit(size_px, ns, pows, max_iters=30, tol=0.01) {
 		// h = size_px / UNIT_SIZE_PX - total height in units,
@@ -138,10 +158,14 @@ class Layout extends Container {
 		return result
 	}
 
-	handle_event(event) {
+	append(child) {
+		this.children.push(child)
+	}
+
+	handle_event(event, type) {
 		for (var i in this.children) {
 			if (this.children[i].hit_test(event.offsetX, event.offsetY) &&
-				this.children[i].handle_event(event))
+				this.children[i].handle_event(event, type))
 			{
 				return true
 			}
@@ -153,30 +177,56 @@ class Layout extends Container {
 class HBox extends Layout {
 	draw(canvas, rect) {
 		super.draw(canvas, rect)
-		var solution = this._solve_unit(rect.w, this._children_ws(), this._children_pows())
-		var x = rect.x
+		var ns = this._children_ws()
+		var pows = this._children_pows()
+		var n = this.children.length + 1
+		ns.push(this.padding * n)
+		pows.push(1)
+
+		var solution = this._solve_unit(rect.w, ns, pows)
+		var padding = solution[this.children.length] / n
+		var x = rect.x + padding, max_h = 0
+
 		for (var i in this.children) {
-			this.children[i].draw(canvas, new Rect(x, rect.y, solution[i], rect.h))
-			x += solution[i]
+			var c = this.children[i]
+			c.draw(canvas, new Rect(x, rect.y, solution[i], rect.h))
+			x += c.rect.w + padding
+			max_h = max([c.rect.h, max_h])
 		}
+
+		this.rect.w = x - rect.x
+		this.rect.h = max_h
 	}
 }
 
 class VBox extends Layout {
 	draw(canvas, rect) {
 		super.draw(canvas, rect)
-		var solution = this._solve_unit(rect.h, this._children_hs(), this._children_pows())
-		var y = rect.y
+		var ns = this._children_hs()
+		var pows = this._children_pows()
+		var n = this.children.length + 1
+		ns.push(this.padding * n)
+		pows.push(1)
+
+		var solution = this._solve_unit(rect.h, ns, pows)
+		var padding = solution[this.children.length] / n
+		var y = rect.y + padding, max_w = 0
+
 		for (var i in this.children) {
-			this.children[i].draw(canvas, new Rect(rect.x, y, rect.w, solution[i]))
-			y += solution[i]
+			var c = this.children[i]
+			c.draw(canvas, new Rect(rect.x, y, rect.w, solution[i]))
+			y += c.rect.h + padding
+			max_w = max([c.rect.w, max_w])
 		}
+
+		this.rect.w = max_w
+		this.rect.h = y - rect.y
 	}
 }
 
-class Box extends Container {
-	constructor(w, h, pow, color) {
-		super(w, h, pow)
+class ColorBox extends Container {
+	constructor(color="#F0F") {
+		super()
 		this.color = color
 	}
 
@@ -189,42 +239,45 @@ class Box extends Container {
 }
 
 class TextBox extends Container {
-	constructor(w, h, pow, text) {
-		super(w, h, pow)
+	constructor(text="") {
+		super()
 		this.text = text
 	}
 
 	draw(canvas, rect) {
 		super.draw(canvas, rect)
 		var ctx = canvas.getContext("2d")
-		ctx.fillStyle = '#ff9';
-		ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+		// ctx.fillStyle = '#ff9';
+		// ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
 		ctx.font = rect.h*0.8 + "px Mono"
 		ctx.fillStyle = "black"
 		ctx.fillText(this.text, rect.x, rect.y+rect.h*0.8)
 	}
 }
 
+class ImgBox extends Container {
+	constructor(url="") {
+		super()
+		this.img = new Image()
+		this.img.onload = ()=>this._draw_later()
+		this.img.src = url
+	}
 
-// size_px = 100
-// ns = [1, 2, 1]
-// pows = [0.5, 1, 1]
+	_draw_later() {
+		var ctx = this.canvas.getContext("2d")
+		var r = this.rect
+		ctx.drawImage(this.img, r.x, r.y, r.w, r.h)
+	}
 
-// x = (new Layout())._solve_unit(size_px, ns, pows)
-// console.log(x)
-
-// hb = new HBox()
-// hb.children.push(new Box(1, 1, 0.5, "#F00"))
-// hb.children.push(new Box(1, 1, 1, "#0F0"))
-// hb.children.push(new Box(1, 1, 1, "#00F"))
-
-// vb = new VBox()
-// vb.children.push(new TextBox(1, 1, 0.5, "Hxgf"))
-// vb.children.push(hb)
+	draw(canvas, rect) {
+		super.draw(canvas, rect)
+		this._draw_later()
+	}
+}
 
 class Meter extends Container {
-	constructor(w, h, pow, data, color) {
-		super(w, h, pow)
+	constructor(data=[], color="#F0F") {
+		super()
 		this.data = data
 		this.color = color
 	}
@@ -251,77 +304,78 @@ class Meter extends Container {
 	}
 }
 
-// class Button extends Container {
-// 	constructor(w, h, pow, visuals, popup_text, onclick) {
-// 		super(w, h, pow)
-// 		this.visuals = visuals
-// 		this.popup_text = popup_text
-// 		this.onclick = onclick
-// 		this.rect = new Rect()
-// 	}
-
-// 	draw(canvas, rect) {
-// 		super.draw(canvas, rect)
-// 		this.visuals.draw(canvas, rect)
-// 	}
-// }
+function space(val=0.1) {
+	return new Container({w:val, h:val})
+}
 
 class Pod extends HBox {
 	uptime = "13h"
 	node = "Node67"
 	cpu = [0, 0, 0.1, 0.5, 0.2, 0.3, 0.4, 0.5]
 	mem = [0, 0, 100,  50,  80, 90,  110, 105]
+	status = "Ready"
+	padding = 0.1
 
 	constructor() {
 		super()
-		var vb1 = new VBox(3)
+		var vb1 = new VBox()
+		vb1.w = 3
 		var vb2 = new VBox()
-		this.children.push(vb1)
-		this.children.push(new Box(0.1, 1, 1, "#FFF"))
-		this.children.push(vb2)
+		this.append(vb1)
+		this.append(vb2)
 
-		vb1.children.push(new TextBox(1, 1, 1, this.uptime))
-		vb1.children.push(new Box(1, 0.1, 1, "#FFF"))
-		vb1.children.push(new TextBox(1, 1, 1, this.node))
-		vb1.children.push(new Box(1, 0.1, 1, "#FFF"))
-		vb1.children.push(new Meter(1, 1, 1, this.cpu, "#8F8"))
-		vb1.children.push(new Box(1, 0.1, 1, "#FFF"))
-		vb1.children.push(new Meter(1, 1, 1, this.mem, "#88F"))
+		vb1.padding = 0.1
+		vb1.append(new TextBox(this.uptime))
+		vb1.append(new TextBox(this.node))
+		vb1.append(new Meter(this.cpu, "#8F8"))
+		vb1.append(new Meter(this.mem, "#88F"))
 
-		var b1 = new Box(1, 1, 1, "#00F")
+		vb2.padding = 0.1
+		var b1 = new ImgBox("assets/logs.svg")
 		b1.onclick = e=>console.log("B1")
-		vb2.children.push(b1)
-		vb2.children.push(new Box(1, 0.1, 1, "#FFF"))
+		vb2.append(b1)
 
-		var b2 = new Box(1, 1, 1, "#F00")
+		var b2 = new ImgBox("assets/exec.svg")
 		b2.onclick = e=>console.log("B2")
-		vb2.children.push(b2)
-		vb2.children.push(new Box(1, 0.1, 1, "#FFF"))
+		vb2.append(b2)
 
-		var b3 = new Box(1, 1, 1, "#F0F")
+		var b3 = new ImgBox("assets/edit.svg")
 		b3.onclick = e=>console.log("B3")
-		vb2.children.push(b3)
-		vb2.children.push(new Box(1, 0.1, 1, "#FFF"))
+		vb2.append(b3)
 
-		var b4 = new Box(1, 1, 1, "#0F0")
+		var b4 = new ImgBox("assets/delete.svg")
+		b4.cursor_style = "pointer"
 		b4.onclick = e=>console.log("B4")
-		vb2.children.push(b4)
+		vb2.append(b4)
+	}
+
+	draw(canvas, rect) {
+		var ctx = canvas.getContext("2d")
+		var colors = {"Waiting": "#FFA", "Ready": "#BFB", "Terminated": "#FBB"}
+		ctx.fillStyle = colors[this.status]
+		var x = rect.x, y = rect.y, w = min([rect.w, rect.h])
+		ctx.fillRect(x, y, w, w)
+		super.draw(canvas, new Rect(x, y, w, w))
 	}
 }
 
-scene = new Pod()
+// scene = new Pod()
+scene = new HBox()
+scene.padding = 0.1
+scene.append(new Pod())
+scene.append(new Pod())
+scene.append(new Pod())
+scene.children[1].status = "Waiting"
+scene.children[2].status = "Terminated"
 
 
 var canvas = document.getElementById("myCanvas");
 canvas.onwheel = zoom
 canvas.onmousemove = shift
 // canvas.onclick = scene.children[0].children[1].handle_event
-canvas.onclick = e=>scene.handle_event(e)
-canvas.onmouseenter = e=>scene.handle_event(e, "onmouseover")
+canvas.onclick = e=>scene.handle_event(e, "onclick")
 
-r = new Rect(100, 100, 200, 200)
-
-scene.draw(canvas, r)
+r = new Rect(100, 100, 600, 200)
 
 function redraw() {
 	// clear canvas
@@ -332,11 +386,16 @@ function redraw() {
 	scene.draw(canvas, r)
 }
 
+redraw()
+
 function shift(event) {
+	canvas.style.cursor = ""
 	if (event.buttons==1 && event.button==0) {
 		r.x += event.movementX
 		r.y += event.movementY
 		redraw()
+	} else {
+		scene.handle_event(event, "onmousemove")
 	}
 }
 
