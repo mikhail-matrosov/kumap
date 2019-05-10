@@ -36,6 +36,12 @@ function min(arr) {
 	return res
 }
 
+function each_get(arr, key) {
+	var result = new Array(arr.length)
+	for (var i in arr) result[i] = arr[i][key]
+	return result
+}
+
 function solve_unit(size_px, ns, pows, max_iters=30, tol=0.01) {
 	// h = size_px / UNIT_SIZE_PX - total height in units,
 	// n_i = ns[i] - hight of each element in cells,
@@ -139,26 +145,8 @@ class Layout extends Container {
 	padding = 0
 	spacing = 0
 
-	_children_pows() {
-		var result = new Array()
-		for (var i in this.children) result.push(this.children[i].pow)
-		return result
-	}
-
-	_children_ws() {
-		var result = new Array()
-		for (var i in this.children) result.push(this.children[i].w)
-		return result
-	}
-
-	_children_hs() {
-		var result = new Array()
-		for (var i in this.children) result.push(this.children[i].h)
-		return result
-	}
-
 	_solve_sizes_and_spacing(size_px, ns) {
-		var pows = this._children_pows()
+		var pows = each_get(this.children, "pow")
 		var space = this.padding * 2 + this.spacing * (this.children.length-1)
 		var padding = 0, spacing = 0
 		if (space > 0) {
@@ -197,7 +185,7 @@ class HBox extends Layout {
 		super.draw(canvas, rect)
 		
 		var [solution, padding, spacing] = this._solve_sizes_and_spacing(
-			rect.w, this._children_ws())
+			rect.w, each_get(this.children, "w"))
 		var x = rect.x + padding, max_h = 0
 
 		for (var i in this.children) {
@@ -218,7 +206,7 @@ class VBox extends Layout {
 		super.draw(canvas, rect)
 
 		var [solution, padding, spacing] = this._solve_sizes_and_spacing(
-			rect.h, this._children_hs())
+			rect.h, each_get(this.children, "h"))
 		var y = rect.y + padding, max_w = 0
 
 		for (var i in this.children) {

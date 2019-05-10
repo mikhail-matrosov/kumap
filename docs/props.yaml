@@ -1,0 +1,19 @@
+# header
+# displays
+# controls
+# children/extend
+# popup = full version
+
+
+deployment:
+  header: [name]
+  displays: [cpu, mem]
+  controls: [logs, edit, scale, delete]
+
+replicaset:
+  displays: [uptime, image]
+  controls: [logs, make_active]
+
+pod:
+  displays: [uptime, node, cpu, mem]
+  controls: [logs, exec, delete]
