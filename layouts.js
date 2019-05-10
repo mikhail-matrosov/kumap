@@ -87,9 +87,10 @@ class Rect {
 }
 
 class Container {
-	canvas = undefined
+	canvas = null
 	rect = new Rect()
-	cursor_style = undefined
+	cursor_style = null
+	bg_color = null
 
 	// size in cells
 	constructor(w=1, h=1, pow=1) {
@@ -101,6 +102,12 @@ class Container {
 	draw(canvas, rect) {
 		this.canvas = canvas
 		this.rect = rect.copy()
+
+		if (this.bg_color) {
+			var ctx = canvas.getContext("2d")
+			ctx.fillStyle = this.bg_color
+			ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
+		}
 	}
 
 	hit_test(x, y) {
@@ -150,6 +157,25 @@ class Layout extends Container {
 		return result
 	}
 
+	_solve_sizes_and_spacing(size_px, ns) {
+		var pows = this._children_pows()
+		var space = this.padding * 2 + this.spacing * (this.children.length-1)
+		var padding = 0, spacing = 0
+		if (space > 0) {
+			ns.push(space)
+			pows.push(1)
+		}
+
+		var solution = solve_unit(size_px, ns, pows)
+
+		if (space > 0) {
+			padding = solution[this.children.length] * this.padding / space
+			spacing = solution[this.children.length] * this.spacing / space
+		}
+
+		return [solution, padding, spacing]
+	}
+
 	append(child) {
 		this.children.push(child)
 	}
@@ -169,21 +195,9 @@ class Layout extends Container {
 class HBox extends Layout {
 	draw(canvas, rect) {
 		super.draw(canvas, rect)
-		var ns = this._children_ws()
-		var pows = this._children_pows()
-		var space = this.padding * 2 + this.spacing * (this.children.length-1)
-		var padding = 0, spacing = 0
-		if (space > 0) {
-			ns.push(space)
-			pows.push(1)
-		}
-
-		var solution = solve_unit(rect.w, ns, pows)
-
-		if (space > 0) {
-			padding = solution[this.children.length] * this.padding / space
-			spacing = solution[this.children.length] * this.spacing / space
-		}
+		
+		var [solution, padding, spacing] = this._solve_sizes_and_spacing(
+			rect.w, this._children_ws())
 		var x = rect.x + padding, max_h = 0
 
 		for (var i in this.children) {
@@ -202,21 +216,9 @@ class HBox extends Layout {
 class VBox extends Layout {
 	draw(canvas, rect) {
 		super.draw(canvas, rect)
-		var ns = this._children_hs()
-		var pows = this._children_pows()
-		var space = this.padding * 2 + this.spacing * (this.children.length-1)
-		var padding = 0, spacing = 0
-		if (space > 0) {
-			ns.push(space)
-			pows.push(1)
-		}
 
-		var solution = solve_unit(rect.h, ns, pows)
-
-		if (space > 0) {
-			padding = solution[this.children.length] * this.padding / space
-			spacing = solution[this.children.length] * this.spacing / space
-		}
+		var [solution, padding, spacing] = this._solve_sizes_and_spacing(
+			rect.h, this._children_hs())
 		var y = rect.y + padding, max_w = 0
 
 		for (var i in this.children) {
@@ -232,20 +234,6 @@ class VBox extends Layout {
 	}
 }
 
-class ColorBox extends Container {
-	constructor(color="#F0F") {
-		super()
-		this.color = color
-	}
-
-	draw(canvas, rect) {
-		super.draw(canvas, rect)
-		var ctx = canvas.getContext("2d")
-		ctx.fillStyle = this.color
-		ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
-	}
-}
-
 class TextBox extends Container {
 	constructor(text="") {
 		super()
@@ -255,7 +243,7 @@ class TextBox extends Container {
 	draw(canvas, rect) {
 		super.draw(canvas, rect)
 		var ctx = canvas.getContext("2d")
-		ctx.font = rect.h*0.8 + "px Mono"
+		ctx.font = rect.h*0.8 + "px arial"
 		ctx.fillStyle = "black"
 		ctx.fillText(this.text, rect.x, rect.y+rect.h*0.8)
 	}

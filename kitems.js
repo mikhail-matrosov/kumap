@@ -1,4 +1,6 @@
 class Meter extends Container {
+	bg_color = "#BBB"
+
 	constructor(data=[], color="#F0F") {
 		super()
 		this.data = data
@@ -8,8 +10,6 @@ class Meter extends Container {
 	draw(canvas, rect) {
 		super.draw(canvas, rect)
 		var ctx = canvas.getContext("2d")
-		ctx.fillStyle = "#BBB"
-		ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
 		ctx.fillStyle = this.color
 		if (this.data.length > 1) {
 			ctx.beginPath();
@@ -28,11 +28,13 @@ class Meter extends Container {
 }
 
 class Pod extends HBox {
+	status = "Ready"
 	uptime = "13h"
 	node = "Node67"
 	cpu = [0, 0, 0.1, 0.5, 0.2, 0.3, 0.4, 0.5]
 	mem = [0, 0, 100,  50,  80, 90,  110, 105]
-	status = "Ready"
+
+	bg_color = "#BBB"
 	padding = 0.1
 	spacing = 0.1
 
@@ -71,20 +73,19 @@ class Pod extends HBox {
 	}
 
 	draw(canvas, rect) {
-		var ctx = canvas.getContext("2d")
-		var colors = {"Waiting": "#FFA", "Ready": "#EEE", "Terminated": "#FBB"}
-		ctx.fillStyle = colors[this.status]
 		var x = rect.x, y = rect.y, w = min([rect.w, rect.h])
-		ctx.fillRect(x, y, w, w)
+		var colors = {"Waiting": "#FFA", "Ready": "#EEE", "Terminated": "#FBB"}
+		this.bg_color = colors[this.status]
 		super.draw(canvas, new Rect(x, y, w, w))
 	}
 }
 
 class ReplicaSetHeader extends HBox {
+	status = "Ready"
+
 	w = 2
 	padding = 0.1
 	spacing = 0.1
-	status = "Ready"
 
 	constructor() {
 		super()
@@ -110,12 +111,10 @@ class ReplicaSetHeader extends HBox {
 	}
 
 	draw(canvas, rect) {
-		var ctx = canvas.getContext("2d")
-		var colors = {"Waiting": "#FFA", "Ready": "#EEE", "Terminated": "#FBB"}
-		ctx.fillStyle = colors[this.status]
 		var x = rect.x, y = rect.y, w = min([rect.w, rect.h*2])
 		var h = w/2
-		ctx.fillRect(x, y, w, h)
+		var colors = {"Waiting": "#FFA", "Ready": "#EEE", "Terminated": "#FBB"}
+		this.bg_color = colors[this.status]
 		super.draw(canvas, new Rect(x, y, w, h))
 	}
 }
@@ -165,10 +164,8 @@ class DeploymentHeader extends HBox {
 	}
 
 	draw(canvas, rect) {
-		var ctx = canvas.getContext("2d")
-		var colors = {"Waiting": "#FFA", "Ready": "#EEE", "Terminated": "#FBB"}
-		ctx.fillStyle = colors[this.status]
-		ctx.fillRect(rect.x, rect.y, rect.w, rect.h)
+		var colors = {"Waiting": "#FFA", "Ready": "#EEE"}
+		this.bg_color = colors[this.status]
 		super.draw(canvas, rect)
 	}
 }
